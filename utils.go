@@ -8,6 +8,7 @@ import (
 	"log"
 	"math"
 	"net/http"
+	"net/url"
 	"slices"
 	"sort"
 	"strconv"
@@ -76,12 +77,12 @@ func fetchDataFromAPI[T any](apiURL string, params string, w http.ResponseWriter
 
 	var result T
 
-	fullURLPath := fmt.Sprintf("%v?name=%v", apiURL, params)
+	fullURLPath := fmt.Sprintf("%v?name=%v", apiURL, url.QueryEscape(params))
 	log.Printf("fetching data from url: %v...\n", fullURLPath)
 	r, err := http.Get(fullURLPath)
 	if err != nil {
 		msg := fmt.Sprintf("%v returned an invalid response", apiURL)
-		respondWithError(w, r.StatusCode, msg)
+		respondWithError(w, http.StatusBadGateway, msg)
 		return result, errors.New(msg)
 	}
 	log.Printf("fetch from %v complete!\n", fullURLPath)
