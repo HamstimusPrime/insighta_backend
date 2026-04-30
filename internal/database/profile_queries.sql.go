@@ -12,7 +12,7 @@ import (
 )
 
 const createProfile = `-- name: CreateProfile :one
-INSERT INTO users(id, name, gender, gender_probability, age,age_group, country_id, country_probability, created_at )
+INSERT INTO users(id, name, gender, gender_probability, age, country_name, age_group, country_id, country_probability, created_at)
 VALUES(
     $1,
     $2,
@@ -22,6 +22,7 @@ VALUES(
     $6,
     $7,
     $8,
+    $9,
     NOW()
 )RETURNING id, name, gender, gender_probability, age, country_name, age_group, country_id, country_probability, created_at
 `
@@ -32,6 +33,7 @@ type CreateProfileParams struct {
 	Gender             string
 	GenderProbability  float64
 	Age                int32
+	CountryName        string
 	AgeGroup           string
 	CountryID          string
 	CountryProbability float64
@@ -44,6 +46,7 @@ func (q *Queries) CreateProfile(ctx context.Context, arg CreateProfileParams) (U
 		arg.Gender,
 		arg.GenderProbability,
 		arg.Age,
+		arg.CountryName,
 		arg.AgeGroup,
 		arg.CountryID,
 		arg.CountryProbability,

@@ -142,15 +142,17 @@ func handlerCreateProfile(w http.ResponseWriter, r *http.Request, q *database.Qu
 	// Nationality: pick the country with
 	// the highest probability from the Nationalize response
 
+	topCountry := getTopCountry(nationalizeData.Country)
 	profile := database.CreateProfileParams{
 		ID:                 uuid.New(),
 		Name:               genderizeData.Name,
 		Gender:             genderizeData.Gender,
 		GenderProbability:  genderizeData.Probability,
 		Age:                int32(agifyData.Age),
+		CountryName:        isoCountryNames[topCountry.CountryID],
 		AgeGroup:           ageGroupFromAgify(agifyData.Age),
-		CountryID:          getTopCountry(nationalizeData.Country).CountryID,
-		CountryProbability: getTopCountry(nationalizeData.Country).Probability,
+		CountryID:          topCountry.CountryID,
+		CountryProbability: topCountry.Probability,
 	}
 
 	dbUser, err = q.CreateProfile(context.Background(), profile)
