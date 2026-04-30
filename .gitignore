@@ -1,5 +1,4 @@
 .env
 .notes
-insighta-server
-insighta_backend
-*.test
+.vscode
+
