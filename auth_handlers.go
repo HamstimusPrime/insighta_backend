@@ -95,7 +95,39 @@ func (cfg *apiConfig) handlerGitHubLogin(w http.ResponseWriter, r *http.Request)
 		http.Redirect(w, r, githubURL, http.StatusFound)
 
 	default:
-		respondWithError(w, http.StatusBadRequest, "source must be web-portal or cli")
+		// No source param: behave like web-portal using the configured portal URL.
+		callbackDest := cfg.webPortalURL
+		if callbackDest == "" {
+			callbackDest = cfg.baseURL
+		}
+		state, err := auth.GenerateRandomHex(32)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "failed to generate state")
+			return
+		}
+		verifier, err := auth.GenerateRandomHex(32)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "failed to generate verifier")
+			return
+		}
+		challenge := auth.CodeChallenge(verifier)
+		oauthStates.Lock()
+		oauthStates.m[state] = oauthSession{
+			codeVerifier: verifier,
+			createdAt:    time.Now(),
+			source:       "web-portal",
+			callbackURL:  callbackDest,
+		}
+		oauthStates.Unlock()
+		redirectURI := cfg.baseURL + "/auth/github/callback"
+		githubURL := fmt.Sprintf(
+			"https://github.com/login/oauth/authorize?client_id=%s&redirect_uri=%s&state=%s&code_challenge=%s&code_challenge_method=S256&scope=user:email",
+			url.QueryEscape(cfg.githubClientID),
+			url.QueryEscape(redirectURI),
+			url.QueryEscape(state),
+			url.QueryEscape(challenge),
+		)
+		http.Redirect(w, r, githubURL, http.StatusFound)
 	}
 }
 
@@ -109,19 +141,7 @@ func (cfg *apiConfig) handlerWebCallback(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	oauthStates.Lock()
-	session, ok := oauthStates.m[state]
-	if ok {
-		delete(oauthStates.m, state)
-	}
-	oauthStates.Unlock()
-
-	if !ok || time.Since(session.createdAt) > 5*time.Minute {
-		respondWithError(w, http.StatusBadRequest, "invalid or expired state")
-		return
-	}
-
-	// test_code: skip real GitHub exchange, return tokens for seeded admin user.
+	// test_code: skip state validation and real GitHub exchange, return tokens for seeded admin user.
 	if code == "test_code" && cfg.appEnv != "production" {
 		testGithubID := "test_user_admin"
 		dbUser, err := cfg.db.UpsertAuthUser(r.Context(), database.UpsertAuthUserParams{
@@ -157,6 +177,18 @@ func (cfg *apiConfig) handlerWebCallback(w http.ResponseWriter, r *http.Request)
 			"access_token":  accessToken,
 			"refresh_token": rawRefresh,
 		})
+		return
+	}
+
+	oauthStates.Lock()
+	session, ok := oauthStates.m[state]
+	if ok {
+		delete(oauthStates.m, state)
+	}
+	oauthStates.Unlock()
+
+	if !ok || time.Since(session.createdAt) > 5*time.Minute {
+		respondWithError(w, http.StatusBadRequest, "invalid or expired state")
 		return
 	}
 
